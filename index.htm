@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Japanese Master v5</title>
+    <style>
+        :root {
+            --ios-blue: #007AFF;
+            --ios-green: #34C759;
+            --ios-red: #FF3B30;
+            --ios-bg: #F2F2F7;
+        }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; background-color: #e5e5e7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #iphone-frame {
+            width: 375px; height: 650px;
+            background: white; border: 12px solid #333; border-radius: 40px;
+            position: relative; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+        .screen {
+            padding: 20px; height: 100%; display: none; flex-direction: column;
+            align-items: center; box-sizing: border-box; background: white;
+        }
+        .screen.active { display: flex; }
+
+        /* 아날로그 시계 (토익 버전 스타일) */
+        #analog-clock {
+            width: 150px; height: 150px; border: 4px solid #333; border-radius: 50%;
+            position: relative; margin: 20px 0; background: #fff;
+        }
+        .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; border-radius: 5px; }
+        #h-hand { width: 4px; height: 35px; background: #333; z-index: 3; }
+        #m-hand { width: 3px; height: 55px; background: #666; z-index: 2; }
+        #s-hand { width: 1px; height: 60px; background: var(--ios-red); z-index: 1; }
+        .clock-center {
+            position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
+            background: #333; border-radius: 50%; transform: translate(-50%, -50%); z-index: 4;
+        }
+        .clock-num { position: absolute; font-size: 12px; font-weight: bold; transform: translate(-50%, -50%); }
+
+        /* 점수판 및 헤더 */
+        .info-bar {
+            width: 100%; display: flex; justify-content: space-between;
+            padding: 10px; background: var(--ios-bg); border-radius: 15px; font-size: 14px; margin-bottom: 20px;
+        }
+
+        /* 문제 영역 */
+        .target-box { margin: 30px 0; text-align: center; }
+        #target-word { font-size: 28px; font-weight: bold; color: #1c1c1e; line-height: 1.3; }
+        #target-pron { color: var(--ios-blue); margin-top: 10px; font-size: 18px; cursor: pointer; }
+
+        /* 옵션 버튼 */
+        .opt-btn {
+            width: 100%; padding: 15px; margin: 5px 0; border: none;
+            border-radius: 12px; background: var(--ios-bg); font-size: 16px;
+            cursor: pointer; transition: 0.2s; text-align: left; padding-left: 20px;
+        }
+        .opt-btn.correct { background: var(--ios-green) !important; color: white; }
+        .opt-btn.wrong { background: var(--ios-red) !important; color: white; }
+
+        .next-btn {
+            background: var(--ios-blue); color: white; border: none; padding: 12px 30px;
+            border-radius: 20px; margin-top: 20px; cursor: pointer; display: none;
+        }
+
+        /* 결과 테이블 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div id="iphone-frame">
+    <div id="home-screen" class="screen active" style="justify-content: center;">
+        <div id="analog-clock">
+            <div class="clock-center"></div>
+            <div id="h-hand" class="hand"></div>
+            <div id="m-hand" class="hand"></div>
+            <div id="s-hand" class="hand"></div>
+        </div>
+        <h1 style="font-size: 24px;">Japanese Master <br><small>Version 5.0</small></h1>
+        <button class="opt-btn" style="text-align: center; background: var(--ios-blue); color: white;" onclick="initGame()">학습 시작하기</button>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="info-bar">
+            <span>STEP: <b id="step-val">1</b>/10</span>
+            <span>SCORE: <b id="score-val" style="color:var(--ios-red)">100</b></span>
+            <span>TIME: <b id="time-val">0s</b></span>
+        </div>
+        <div class="target-box">
+            <div id="target-id" style="font-size: 12px; color: #999;">ID: 1</div>
+            <div id="target-word">일본어 문장</div>
+            <div id="target-pron" onclick="replayAudio()">🔊 발음 듣기</div>
+        </div>
+        <div id="options-box" style="width: 100%;"></div>
+        <button id="next-btn" class="next-btn" onclick="renderQuestion()">다음 문제 ▶</button>
+    </div>
+
+    <div id="result-screen" class="screen">
+        <h2 style="margin-top: 30px;">Result Report</h2>
+        <div id="final-score" style="font-size: 24px; font-weight: 800; color: var(--ios-blue);">0 POINTS</div>
+        <div style="width: 100%; overflow-y: auto; margin-top: 20px;">
+            <table>
+                <thead><tr><th>문장</th><th>의미</th></tr></thead>
+                <tbody id="wrong-list"></tbody>
+            </table>
+        </div>
+        <button class="opt-btn" style="margin-top:20px; text-align: center; background: #333; color: white;" onclick="location.reload()">다시 시작하기</button>
+    </div>
+</div>
+
+<script>
+// [데이터 보호] 11~20번 데이터는 변경되지 않았습니다.
+const VOCAB_DATA = [
+    ["こんにちは。", "콘니치와", "안녕하세요 (낮 인사)"],
+    ["ありがとうございます。", "아리가토- 고자이마스", "감사합니다"],
+    ["すみません。", "스미마센", "죄송합니다 / 저기요"],
+    ["はい。", "하이", "네"],
+    ["いいえ。", "이-에", "아니요"],
+    ["お願いします。", "오네가이시마스", "부탁합니다"],
+    ["おはようございます。", "오하요- 고자이마스", "안녕하세요 (아침 인사)"],
+    ["こんばんは。", "콘반와", "안녕하세요 (저녁 인사)"],
+    ["おやすみなさい。", "오야스미나사이", "안녕히 주무세요"],
+    ["さようなら。", "사요-나라", "안녕히 가세요"],
+    ["お元気ですか？", "오겐키데스카?", "잘 지내시나요?"], // 11
+    ["わかります。", "와카리마스", "이해합니다 / 압니다"], // 12
+    ["わかりません。", "와카리마센", "모르겠습니다"], // 13
+    ["美味しいです。", "오이시-데스", "맛있어요"], // 14
+    ["お腹が空きました。", "오나카가 스키마시타", "배가 고파요"], // 15
+    ["いくらですか？", "이쿠라데스카?", "얼마인가요?"], // 16
+    ["これをください。", "코레오 쿠다사이", "이것을 주세요"], // 17
+    ["どこですか？", "도코데스카?", "어디인가요?"], // 18
+    ["大丈夫입니다。", "다이죠-부데스", "괜찮습니다"], // 19
+    ["嬉しいです。", "우레시-데스", "기쁩니다"], // 20
+    ["初めまして。", "하지메마시테", "처음 뵙겠습니다"],
+    ["よろしくお願いします。", "요로시쿠 오네가이시마스", "잘 부탁드립니다"],
+    ["おめでとうございます。", "오메데토- 고자이마스", "축하합니다"],
+    ["助けてください。", "타스케테 쿠다사이", "도와주세요"],
+    ["ちょっと待ってください。", "촛토 맛테 쿠다사이", "잠시만 기다려 주세요"],
+    ["もう一度お願いします。", "모- 이치도 오네가이시마스", "한 번 더 부탁합니다"],
+    ["ゆっくり話してください。", "윳쿠리 하나시테 쿠다사이", "천천히 말해 주세요"],
+    ["お名前は何ですか？", "오나마에와 난데스카?", "성함이 무엇인가요?"],
+    ["日本語が少しわかります。", "니혼고가 스코시 와카리마스", "일본어를 조금 압니다"],
+    ["好きです。", "스키데스", "좋아합니다"],
+    ["嫌いです。", "키라이데스", "싫어합니다"],
+    ["暑いですね。", "아츠이데스네", "덥네요"],
+    ["寒いですね。", "사무이데스네", "춥네요"],
+    ["楽しいです。", "타노시-데스", "즐겁습니다"],
+    ["疲れました。", "츠카레마시타", "피곤합니다"],
+    ["頑張ってください。", "간밧테 쿠다사이", "힘내세요"],
+    ["失礼します。", "시츠레이시마스", "실례합니다"],
+    ["良い一日を。", "요이 이치니치오", "좋은 하루 되세요"],
+    ["또 만나요。", "마타 아이마쇼-", "또 만나요"],
+    ["ごめんなさい。", "고멘나사이", "미안합니다"],
+    ["なるほど。", "나루호도", "그렇군요"],
+    ["本当ですか？", "혼토-데스카?", "정말인가요?"],
+    ["まあまあです。", "마-마-데스", "그저 그렇습니다"],
+    ["素晴らしいです。", "스바라시-데스", "멋집니다 / 훌륭합니다"],
+    ["興味があります。", "쿄-미가 아리마스", "관심이 있습니다"],
+    ["忙しいです。", "이소가시-데스", "바쁩니다"],
+    ["暇입니다。", "히마데스", "한가합니다"],
+    ["どこに行きますか？", "도코니 이키마스카?", "어디에 가나요?"],
+    ["何をしていますか？", "나니오 시테이마스카?", "무엇을 하고 있나요?"],
+    ["応援しています。", "오-엔 시테이마스", "응원하고 있습니다"]
+];
+
+(function() {
+    let nStep = 0; let timerInterval; let seconds = 0;
+    let currentWordObj = null; let wrongWords = []; let quizSet = [];
+    let synth = window.speechSynthesis;
+
+    // 시계 바늘 업데이트
+    function updateClock() {
+        const now = new Date();
+        const h = document.getElementById('h-hand'), m = document.getElementById('m-hand'), s = document.getElementById('s-hand');
+        if(s) s.style.transform = `translateX(-50%) rotate(${now.getSeconds()*6}deg)`;
+        if(m) m.style.transform = `translateX(-50%) rotate(${now.getMinutes()*6}deg)`;
+        if(h) h.style.transform = `translateX(-50%) rotate(${(now.getHours()%12)*30 + now.getMinutes()*0.5}deg)`;
+    }
+
+    // 시계 숫자 생성
+    function createClockNumbers() {
+        const clock = document.getElementById('analog-clock');
+        const radius = 60; 
+        for (let i = 1; i <= 12; i++) {
+            const num = document.createElement('div');
+            num.className = 'clock-num';
+            num.innerText = i;
+            const angle = (i * 30 - 90) * (Math.PI / 180);
+            const x = 75 + radius * Math.cos(angle);
+            const y = 75 + radius * Math.sin(angle);
+            num.style.left = x + 'px'; num.style.top = y + 'px';
+            clock.appendChild(num);
+        }
+    }
+
+    window.speakWord = function(text) {
+        if (synth.speaking) synth.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ja-JP'; u.rate = 0.9;
+        synth.speak(u);
+    };
+
+    window.replayAudio = function() { if(currentWordObj) speakWord(currentWordObj[0]); };
+
+    window.initGame = function() {
+        quizSet = [...VOCAB_DATA].sort(() => 0.5 - Math.random()).slice(0, 10);
+        nStep = 0; seconds = 0; wrongWords = [];
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => { 
+            seconds++; 
+            document.getElementById('time-val').innerText = seconds + 's'; 
+        }, 1000);
+        showScreen('game-screen');
+        renderQuestion();
+    };
+
+    window.renderQuestion = function() {
+        if (nStep >= 10) return showResult();
+        
+        document.getElementById('step-val').innerText = nStep + 1;
+        currentWordObj = quizSet[nStep];
+        document.getElementById('target-id').innerText = `ID: ${VOCAB_DATA.indexOf(currentWordObj) + 1}`;
+        document.getElementById('target-word').innerText = currentWordObj[0];
+        document.getElementById('next-btn').style.display = 'none';
+        
+        setTimeout(() => speakWord(currentWordObj[0]), 200);
+
+        const box = document.getElementById('options-box');
+        box.innerHTML = '';
+        let isAnswered = false;
+
+        // 오답 2개 추출
+        const distractors = VOCAB_DATA.filter(i => i[0] !== currentWordObj[0])
+                                     .sort(() => 0.5 - Math.random()).slice(0, 2);
+        const choices = [currentWordObj[2], ...distractors.map(d => d[2])].sort(() => 0.5 - Math.random());
+
+        choices.forEach(c => {
+            const b = document.createElement('button');
+            b.className = 'opt-btn'; b.innerText = c;
+            b.onclick = () => {
+                if (isAnswered) return; isAnswered = true;
+                if (c === currentWordObj[2]) {
+                    b.classList.add('correct');
+                } else {
+                    b.classList.add('wrong');
+                    wrongWords.push(currentWordObj);
+                    Array.from(box.children).forEach(x => { if(x.innerText === currentWordObj[2]) x.classList.add('correct'); });
+                }
+                document.getElementById('score-val').innerText = 100 - (wrongWords.length * 10);
+                document.getElementById('next-btn').style.display = 'block';
+                nStep++;
+            };
+            box.appendChild(b);
+        });
+    };
+
+    function showResult() {
+        clearInterval(timerInterval);
+        showScreen('result-screen');
+        document.getElementById('final-score').innerText = `${100 - (wrongWords.length * 10)} POINTS (${seconds}s)`;
+        const list = document.getElementById('wrong-list');
+        list.innerHTML = '';
+        if (wrongWords.length === 0) {
+            list.innerHTML = '<tr><td colspan="2" style="text-align:center; color:var(--ios-green); font-weight:800;">완벽합니다! 100점!</td></tr>';
+        } else {
+            wrongWords.forEach(w => {
+                list.innerHTML += `<tr><td style="font-weight:800;">${w[0]}</td><td>${w[2]}</td></tr>`;
+            });
+        }
+    }
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        createClockNumbers();
+        setInterval(updateClock, 1000);
+    });
+})();
+</script>
+</body>
+</html>
